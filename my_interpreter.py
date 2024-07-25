@@ -7,8 +7,8 @@ MAX_STRING_SIZE = 300
 
 NUL = (1 << 64) - 1
 
-def list_to_seq(lst):
-    seq = z3.Empty(SeqSort(BitVecSort(64)))
+def list_to_seq(lst, sort):
+    seq = z3.Empty(SeqSort(sort))
     for i in range(len(lst)):
         seq = z3.Concat(seq, Unit(lst[i]))
     
@@ -18,7 +18,6 @@ def seq_to_list(seq):
     lst = []
     for i in range(simplify(z3.Length(seq)).as_long()):
         lst.append(simplify(z3.simplify(seq.at(i))[0]))
-
     return lst
 
 def list_eq(lst1, lst2):
@@ -96,7 +95,7 @@ def z3_expr(node, vars=None, debug=False):
         if type(node.value) == str:
             return z3.StringVal(node.value), vars
         elif type(node.value) == int:
-            return z3.IntVal(node.value), vars
+            return z3.BitVecVal(node.value, 64), vars
         elif type(node.value) == bool:
             return z3.BoolVal(node.value), vars
         elif type(node.value) == float:
@@ -131,7 +130,14 @@ def z3_expr(node, vars=None, debug=False):
         op = node.ops[0]
         rhs, vars = z3_expr(node.comparators[0], vars, debug)
         
-        return cmpop_map[type(op)](lhs, rhs), vars
+        
+        if (isinstance(op, ast.In)):
+            cum_res = False
+            for elt in seq_to_list(rhs):
+                cum_res = z3.Or(cum_res, elt == lhs)
+            return cum_res, vars
+        else:
+            return cmpop_map[type(op)](lhs, rhs), vars
 
 
     # BoolOp
@@ -157,16 +163,20 @@ def z3_expr(node, vars=None, debug=False):
         for elt in node.elts:
             z3_elt, vars = z3_expr(elt, vars, debug)
             elts_list.append(z3_elt)
-       
-        return list_to_seq(elts_list), vars
+            sort = z3_elt.sort()
+
+        
+        return list_to_seq(elts_list, sort), vars
 
     # Function Call
     elif isinstance(node, ast.Call):
         if node.func.id == "sum":
             arg, vars = z3_expr(node.args[0], vars, debug)
-            return z3.IntVal(sum(seq_to_list(arg))), vars
+            return sum(seq_to_list(arg)), vars
         elif node.func.id == "all":
+            
             arg, vars = z3_expr(node.args[0], vars, debug)
+
             return z3.And(seq_to_list(arg)), vars
         else:
             raise Exception(f"z3_expr: function {node.func.id} not implemented")
@@ -178,9 +188,8 @@ def z3_expr(node, vars=None, debug=False):
         if not isinstance(node.slice, ast.Slice):
             index, vars = z3_expr(node.slice, vars, debug)
 
-            if isinstance(value, z3.SeqRef):
+            if value.is_string():
                 return value.at(index.as_long()), vars
-
             else:
                 return value[index.as_long()], vars
         else:
@@ -188,14 +197,14 @@ def z3_expr(node, vars=None, debug=False):
             upper, vars = z3_expr(node.slice.upper, vars, debug) if node.slice.upper else (z3.IntVal(len(value)) if not isinstance(value, z3.SeqRef) else z3.IntVal(MAX_STRING_SIZE), vars)
             lower, vars = z3_expr(node.slice.lower, vars, debug) if node.slice.lower else (z3.IntVal(0), vars)
             step, vars = z3_expr(node.slice.step, vars, debug) if node.slice.step else (z3.IntVal(1), vars)
-
+            
             upper = upper.as_long()
             lower = lower.as_long()
             step = step.as_long()
 
             
             if isinstance(value, z3.SeqRef):
-                s = z3.StringVal("")
+                s = z3.Empty(value.sort())
                 i = lower
                 while i < upper:
                     s = Concat(s, value.at(i))

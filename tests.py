@@ -24,10 +24,11 @@ def test_str_slice(s: str):
     return s[4] == "b"
 
 def test_index_list(x: int):
-    return [1,2,1,x][3] == 3
+    return [1,2,1,x][3] == 4
 
-def test_index_list_nested(x: int):
-    return [1,2,1,[1,x]][3][1] == 2
+## No longer accepts nesetes lists
+# def test_index_list_nested(x: int):
+#     return [1,2,1,[1,x]][3][1] == 2
 
 def test_list_slice(x: int):
     return [0,1,2,3,x,5,6,7,8][2:8:2][1] == 10
@@ -52,6 +53,9 @@ def test_string_slice_6(s: str):
 
 def test_string_slice_7(s: str):
     return "abcdefgh"[1:6:2] == s
+
+def test_string_slice_8(s: str):
+    return "abcdefgh"[1::2] == s
 
 def test_string_slice_8(s: str):
     return "abcdefgh"[1::2] == s
@@ -142,13 +146,13 @@ info_list = [
         "notes": "Tests indexed lists",
         "tags": ["basic", "index", "list"]
     },
-    {
-        "name": "index_list_nested",
-        "sat": test_index_list_nested,
-        "args": inspect.signature(test_index_list_nested).parameters,
-        "notes": "Tests indexed lists",
-        "tags": ["basic", "index", "list"]
-    },
+    # {
+    #     "name": "index_list_nested",
+    #     "sat": test_index_list_nested,
+    #     "args": inspect.signature(test_index_list_nested).parameters,
+    #     "notes": "Tests indexed lists",
+    #     "tags": ["basic", "index", "list"]
+    # },
     {
         "name": "list_slice",
         "sat": test_list_slice,

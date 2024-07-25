@@ -44,8 +44,8 @@ def z3_expr(node, vars=None, debug=False):
 
     # Binary operators.
     if isinstance(node, ast.BinOp):  
-        lhs, vars = z3_expr(node.left, vars)
-        rhs, vars = z3_expr(node.right, vars)
+        lhs, vars = z3_expr(node.left, vars, debug)
+        rhs, vars = z3_expr(node.right, vars, debug)
         if isinstance(node.op, ast.Add):
             return lhs + rhs, vars
         elif isinstance(node.op, ast.Sub):
@@ -67,7 +67,7 @@ def z3_expr(node, vars=None, debug=False):
 
     # Negation
     elif isinstance(node, ast.UnaryOp):  
-        sub, vars = z3_expr(node.operand, vars)
+        sub, vars = z3_expr(node.operand, vars, debug)
         if isinstance(node.op, ast.USub):
             return -sub, vars
 
@@ -94,9 +94,9 @@ def z3_expr(node, vars=None, debug=False):
     
     # Conditional.
     elif isinstance(node, ast.IfExp): 
-        cond, vars = z3_expr(node.test, vars)
-        true, vars = z3_expr(node.body, vars)
-        false, vars = z3_expr(node.orelse, vars)
+        cond, vars = z3_expr(node.test, vars, debug)
+        true, vars = z3_expr(node.body, vars, debug)
+        false, vars = z3_expr(node.orelse, vars, debug)
         return z3.If(cond != 0, true, false), vars
 
     # Compare
@@ -109,9 +109,9 @@ def z3_expr(node, vars=None, debug=False):
                 ast.Gt: lambda x, y: x > y,
                 ast.GtE: lambda x, y: x >= y,
             }
-        lhs, vars = z3_expr(node.left, vars)
+        lhs, vars = z3_expr(node.left, vars, debug)
         op = node.ops[0] 
-        rhs, vars = z3_expr(node.comparators[0], vars)
+        rhs, vars = z3_expr(node.comparators[0], vars, debug)
         if (isinstance(op, ast.In) or isinstance(op, ast.NotIn)):
             cum_res = z3.Or(False)
             for elt in rhs:
@@ -133,12 +133,12 @@ def z3_expr(node, vars=None, debug=False):
         if isinstance(node.op, ast.And):
             cum_res = z3.And(True)
             for v in node.values:
-                res, vars = z3_expr(v, vars)
+                res, vars = z3_expr(v, vars, debug)
                 cum_res = z3.And(cum_res, res)
         elif isinstance(node.op, ast.Or):
             cum_res = z3.Or(False)
             for v in node.values:
-                res, vars = z3_expr(v, vars)
+                res, vars = z3_expr(v, vars, debug)
                 cum_res = z3.Or(cum_res, res)
         else:
             raise Exception("z3_expr: BoolOp not implemented yet")
@@ -148,7 +148,7 @@ def z3_expr(node, vars=None, debug=False):
     elif isinstance(node, ast.List):
         elts_list = []
         for elt in node.elts:
-            z3_elt, vars = z3_expr(elt, vars)
+            z3_elt, vars = z3_expr(elt, vars, debug)
             elts_list.append(z3_elt)
 
         return elts_list, vars
@@ -156,10 +156,10 @@ def z3_expr(node, vars=None, debug=False):
     # Function Call
     elif isinstance(node, ast.Call):
         if node.func.id == "sum":
-            arg, vars = z3_expr(node.args[0])
+            arg, vars = z3_expr(node.args[0], vars, debug)
             return sum(arg), vars
         elif node.func.id == "all":
-            arg, vars = z3_expr(node.args[0])
+            arg, vars = z3_expr(node.args[0], vars, debug)
             return z3.And(arg), vars
         else:
             raise Exception(f"z3_expr: function {node.func.id} not implemented")
@@ -167,9 +167,9 @@ def z3_expr(node, vars=None, debug=False):
     # Subscripts
     elif isinstance(node, ast.Subscript):
         
-        value, vars = z3_expr(node.value, vars)
+        value, vars = z3_expr(node.value, vars, debug)
         if not isinstance(node.slice, ast.Slice):
-            index, vars = z3_expr(node.slice, vars)
+            index, vars = z3_expr(node.slice, vars, debug)
 
             if isinstance(value, z3.SeqRef):
                 return value.at(index.as_long()), vars
@@ -178,9 +178,9 @@ def z3_expr(node, vars=None, debug=False):
                 return value[index.as_long()], vars
         else:
             
-            upper, vars = z3_expr(node.slice.upper, vars) if node.slice.upper else (z3.IntVal(len(value)) if not isinstance(value, z3.SeqRef) else z3.IntVal(MAX_STRING_SIZE), vars)
-            lower, vars = z3_expr(node.slice.lower, vars) if node.slice.lower else (z3.IntVal(0), vars)
-            step, vars = z3_expr(node.slice.step, vars) if node.slice.step else (z3.IntVal(1), vars)
+            upper, vars = z3_expr(node.slice.upper, vars, debug) if node.slice.upper else (z3.IntVal(len(value)) if not isinstance(value, z3.SeqRef) else z3.IntVal(MAX_STRING_SIZE), vars)
+            lower, vars = z3_expr(node.slice.lower, vars, debug) if node.slice.lower else (z3.IntVal(0), vars)
+            step, vars = z3_expr(node.slice.step, vars, debug) if node.slice.step else (z3.IntVal(1), vars)
 
             upper = upper.as_long()
             lower = lower.as_long()

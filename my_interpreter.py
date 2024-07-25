@@ -7,19 +7,17 @@ MAX_STRING_SIZE = 300
 
 NUL = (1 << 64) - 1
 
-def list_to_array(lst):
-    array = K(IntSort(), BitVecVal(NUL, 64))
+def list_to_seq(lst):
+    seq = z3.Empty(SeqSort(BitVecSort(64)))
     for i in range(len(lst)):
-        array = Store(array, i, lst[i])
+        seq = z3.Concat(seq, Unit(lst[i]))
     
-    return array
+    return seq
 
-def array_to_list(array):
+def seq_to_list(seq):
     lst = []
-    i = 0
-    while(simplify(Select(array, i) != nul)) :
-        lst.append(simplify(Select(array, i)))
-        i += 1
+    for i in range(simplify(z3.Length(seq)).as_long()):
+        lst.append(simplify(z3.simplify(seq.at(i))[0]))
 
     return lst
 
@@ -62,8 +60,8 @@ def z3_expr(node, vars=None, debug=False):
 
     # Binary operators.
     if isinstance(node, ast.BinOp):  
-        lhs, vars = z3_expr(node.left, vars)
-        rhs, vars = z3_expr(node.right, vars)
+        lhs, vars = z3_expr(node.left, vars, debug)
+        rhs, vars = z3_expr(node.right, vars, debug)
         if isinstance(node.op, ast.Add):
             return lhs + rhs, vars
         elif isinstance(node.op, ast.Sub):
@@ -85,7 +83,7 @@ def z3_expr(node, vars=None, debug=False):
 
     # Negation
     elif isinstance(node, ast.UnaryOp):  
-        sub, vars = z3_expr(node.operand, vars)
+        sub, vars = z3_expr(node.operand, vars, debug)
         if isinstance(node.op, ast.USub):
             return -sub, vars
 
@@ -107,14 +105,14 @@ def z3_expr(node, vars=None, debug=False):
             raise Exception(f"z3_expr: type {type(node.value)} not implemented yet")
 
     # Variable lookup.
-    elif isinstance(node, ast.Name):  
+    elif isinstance(node, ast.Name):
         return get_var(node.id), vars
     
     # Conditional.
     elif isinstance(node, ast.IfExp): 
-        cond, vars = z3_expr(node.test, vars)
-        true, vars = z3_expr(node.body, vars)
-        false, vars = z3_expr(node.orelse, vars)
+        cond, vars = z3_expr(node.test, vars, debug)
+        true, vars = z3_expr(node.body, vars, debug)
+        false, vars = z3_expr(node.orelse, vars, debug)
         return z3.If(cond != 0, true, false), vars
 
     # Compare
@@ -129,23 +127,24 @@ def z3_expr(node, vars=None, debug=False):
                 ast.In: lambda x, y: x in y,
                 ast.NotIn: lambda x, y: x not in y,
             }
-        lhs, vars = z3_expr(node.left, vars)
-        op = node.ops[0] 
-        rhs, vars = z3_expr(node.comparators[0], vars)
+        lhs, vars = z3_expr(node.left, vars, debug)
+        op = node.ops[0]
+        rhs, vars = z3_expr(node.comparators[0], vars, debug)
+        
+        return cmpop_map[type(op)](lhs, rhs), vars
 
-        return cmpop_map[type(op)](lhs, array_to_list(rhs)), vars
 
     # BoolOp
     elif isinstance(node, ast.BoolOp):
         if isinstance(node.op, ast.And):
             cum_res = z3.And(True)
             for v in node.values:
-                res, vars = z3_expr(v, vars)
+                res, vars = z3_expr(v, vars, debug)
                 cum_res = z3.And(cum_res, res)
         elif isinstance(node.op, ast.Or):
             cum_res = z3.Or(False)
             for v in node.values:
-                res, vars = z3_expr(v, vars)
+                res, vars = z3_expr(v, vars, debug)
                 cum_res = z3.Or(cum_res, res)
         else:
             raise Exception("z3_expr: BoolOp not implemented yet")
@@ -153,30 +152,31 @@ def z3_expr(node, vars=None, debug=False):
 
     # List
     elif isinstance(node, ast.List):
+        
         elts_list = []
         for elt in node.elts:
-            z3_elt, vars = z3_expr(elt, vars)
+            z3_elt, vars = z3_expr(elt, vars, debug)
             elts_list.append(z3_elt)
-
-        return list_to_array(elts_list), vars
+       
+        return list_to_seq(elts_list), vars
 
     # Function Call
     elif isinstance(node, ast.Call):
         if node.func.id == "sum":
-            arg, vars = z3_expr(node.args[0])
-            return sum(array_to_list(arg)), vars
+            arg, vars = z3_expr(node.args[0], vars, debug)
+            return z3.IntVal(sum(seq_to_list(arg))), vars
         elif node.func.id == "all":
-            arg, vars = z3_expr(node.args[0])
-            return z3.And(array_to_list(arg)), vars
+            arg, vars = z3_expr(node.args[0], vars, debug)
+            return z3.And(seq_to_list(arg)), vars
         else:
             raise Exception(f"z3_expr: function {node.func.id} not implemented")
 
     # Subscripts
     elif isinstance(node, ast.Subscript):
         
-        value, vars = z3_expr(node.value, vars)
+        value, vars = z3_expr(node.value, vars, debug)
         if not isinstance(node.slice, ast.Slice):
-            index, vars = z3_expr(node.slice, vars)
+            index, vars = z3_expr(node.slice, vars, debug)
 
             if isinstance(value, z3.SeqRef):
                 return value.at(index.as_long()), vars
@@ -185,9 +185,9 @@ def z3_expr(node, vars=None, debug=False):
                 return value[index.as_long()], vars
         else:
             
-            upper, vars = z3_expr(node.slice.upper, vars) if node.slice.upper else (z3.IntVal(len(value)) if not isinstance(value, z3.SeqRef) else z3.IntVal(MAX_STRING_SIZE), vars)
-            lower, vars = z3_expr(node.slice.lower, vars) if node.slice.lower else (z3.IntVal(0), vars)
-            step, vars = z3_expr(node.slice.step, vars) if node.slice.step else (z3.IntVal(1), vars)
+            upper, vars = z3_expr(node.slice.upper, vars, debug) if node.slice.upper else (z3.IntVal(len(value)) if not isinstance(value, z3.SeqRef) else z3.IntVal(MAX_STRING_SIZE), vars)
+            lower, vars = z3_expr(node.slice.lower, vars, debug) if node.slice.lower else (z3.IntVal(0), vars)
+            step, vars = z3_expr(node.slice.step, vars, debug) if node.slice.step else (z3.IntVal(1), vars)
 
             upper = upper.as_long()
             lower = lower.as_long()

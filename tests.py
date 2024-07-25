@@ -8,6 +8,9 @@ def test_prepositional(x: int, y: int):
 def test_sum(x: int):
     return sum([1,2,x]) == 6
 
+def test_list_type(x: int):
+    return [1,2,x] == [1,2,3]
+
 def test_all(x: int):
     return all([True,True,x == 10])
 
@@ -215,6 +218,13 @@ info_list = [
         "args": inspect.signature(test_string_slice_8).parameters,
         "notes": "Tests whether we can slice a string",
         "tags": ["basic", "index", "slice", "string"]
+    },
+    {
+        "name": "list_type",
+        "sat": test_list_type,
+        "args": inspect.signature(test_list_type).parameters,
+        "notes": "Tests list type",
+        "tags": ["basic", "list"]
     },
 ]
 

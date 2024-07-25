@@ -6,23 +6,27 @@ import inspect
 y = Int('y')
 z = Int('z')
 
-nul = 0b10000000
+nul = (1 << 64) - 1
 
 
 
-def list_to_array(lst, sort):
-    array = K(sort, 0)
+def list_to_array(lst):
+    array = K(IntSort(), BitVecVal(nul, 8))
     for i in range(len(lst)):
         array = Store(array, i, lst[i])
     
     return array
 
-def array_to_list(array, length):
+def array_to_list(array):
     lst = []
-    for i in range(length):
+    i = 0
+    while(simplify(Select(array, i) != nul)) :
         lst.append(simplify(Select(array, i)))
+        i += 1
 
     return lst
+
+print(array_to_list(list_to_array([1,2,3,4])))
 
 
 # a = Array("w", IntSort(), BitVecSort(8))
@@ -51,13 +55,12 @@ def test_str_slice(s: str):
     return s[1:4] == "b"
 
 
-ast_element_finder(test_str_slice)
+# ast_element_finder(test_str_slice)
 
-print([0,1,2,3,4,5,6,7,8,9][1:-1:2])
 
-s = StringVal("lalala")
-print(type(Length(s)))
-print(simplify(Length(s)))
+
+
+print(nul)
 
 
 

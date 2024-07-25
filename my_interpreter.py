@@ -5,24 +5,6 @@ from z3 import *
 
 MAX_STRING_SIZE = 300
 
-NUL = (1 << 64) - 1
-
-def list_to_array(lst):
-    array = K(IntSort(), BitVecVal(NUL, 64))
-    for i in range(len(lst)):
-        array = Store(array, i, lst[i])
-    
-    return array
-
-def array_to_list(array):
-    lst = []
-    i = 0
-    while(simplify(Select(array, i) != nul)) :
-        lst.append(simplify(Select(array, i)))
-        i += 1
-
-    return lst
-
 def list_eq(lst1, lst2):
     if len(lst1) == len(lst2):
         checks = []
@@ -126,14 +108,25 @@ def z3_expr(node, vars=None, debug=False):
                 ast.LtE: lambda x, y: x <= y,
                 ast.Gt: lambda x, y: x > y,
                 ast.GtE: lambda x, y: x >= y,
-                ast.In: lambda x, y: x in y,
-                ast.NotIn: lambda x, y: x not in y,
             }
         lhs, vars = z3_expr(node.left, vars)
         op = node.ops[0] 
         rhs, vars = z3_expr(node.comparators[0], vars)
-
-        return cmpop_map[type(op)](lhs, array_to_list(rhs)), vars
+        if (isinstance(op, ast.In) or isinstance(op, ast.NotIn)):
+            cum_res = z3.Or(False)
+            for elt in rhs:
+                if type(rhs) == list and type(elt) == list:
+                    cum_res = z3.Or(cum_res, list_eq(lhs, els))
+                else:
+                    cum_res = z3.Or(cum_res, lhs == elt)
+            if (isinstance(op, ast.In)):
+                return cum_res, vars
+            else: 
+                return z3.Not(cum_res), vars
+        elif (isinstance(node.left, ast.List)):
+            return list_eq(lhs, rhs), vars
+        else:
+            return cmpop_map[type(op)](lhs, rhs), vars
 
     # BoolOp
     elif isinstance(node, ast.BoolOp):
@@ -158,16 +151,16 @@ def z3_expr(node, vars=None, debug=False):
             z3_elt, vars = z3_expr(elt, vars)
             elts_list.append(z3_elt)
 
-        return list_to_array(elts_list), vars
+        return elts_list, vars
 
     # Function Call
     elif isinstance(node, ast.Call):
         if node.func.id == "sum":
             arg, vars = z3_expr(node.args[0])
-            return sum(array_to_list(arg)), vars
+            return sum(arg), vars
         elif node.func.id == "all":
             arg, vars = z3_expr(node.args[0])
-            return z3.And(array_to_list(arg)), vars
+            return z3.And(arg), vars
         else:
             raise Exception(f"z3_expr: function {node.func.id} not implemented")
 

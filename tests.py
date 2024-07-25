@@ -5,6 +5,9 @@ import inspect
 def test_prepositional(x: int, y: int):
     return x > 12 and x < 20 and y > 15 and x > y
 
+def test_nested_list(x: int, y: int, z: int):
+    return [1,[[1,2],2],3,4] == [1,[[z,2],y],3,x]
+
 def test_sum(x: int):
     return sum([1,2,x]) == 6
 
@@ -76,6 +79,13 @@ def test_array_type(li: List[int]):
     return li == [1,2,3,4]
 
 info_list = [
+    {
+        "name": "nested_lists",
+        "sat": test_nested_list,
+        "args": inspect.signature(test_nested_list).parameters,
+        "notes": "Testing whether z3 can solve for variables inside nested lists",
+        "tags": ["basic", "list"]
+    },
     {
         "name": "prepositional_logic",
         "sat": test_prepositional,

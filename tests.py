@@ -11,6 +11,9 @@ def test_sum(x: int):
 def test_list_type(x: int):
     return [1,2,x] == [1,2,3]
 
+def test_list_type_str(s: str):
+    return ["a","aaa",s] == ["a","aaa","batata"]
+
 def test_all(x: int):
     return all([True,True,x == 10])
 
@@ -57,8 +60,11 @@ def test_string_slice_7(s: str):
 def test_string_slice_8(s: str):
     return "abcdefgh"[1::2] == s
 
-def test_string_slice_8(s: str):
-    return "abcdefgh"[1::2] == s
+def test_list_var(li: List[int]):
+    return li == [1,2,3,4]
+
+def test_list_var_str(li: List[str]):
+    return li == ["hey", "hello", "world"]
 
 
 
@@ -229,6 +235,27 @@ info_list = [
         "args": inspect.signature(test_list_type).parameters,
         "notes": "Tests list type",
         "tags": ["basic", "list"]
+    },
+    {
+        "name": "list_type_str",
+        "sat": test_list_type_str,
+        "args": inspect.signature(test_list_type_str).parameters,
+        "notes": "Tests list type string",
+        "tags": ["basic", "list", "string"]
+    },
+    {
+        "name": "list_var",
+        "sat": test_list_var,
+        "args": inspect.signature(test_list_var).parameters,
+        "notes": "Tests list type as variable",
+        "tags": ["basic", "list"]
+    },
+    {
+        "name": "list_var_str",
+        "sat": test_list_var_str,
+        "args": inspect.signature(test_list_var_str).parameters,
+        "notes": "Tests list type as variable",
+        "tags": ["basic", "list", "string"]
     },
 ]
 

@@ -5,7 +5,7 @@ import ast
 import inspect
 from z3 import *
 
-from my_interpreter import z3_expr
+from my_interpreter import z3_expr, seq_to_list
 
 import sys
 
@@ -29,7 +29,14 @@ class SatTest:
         # Extract arguments
         vars = {}
         for arg in function_ast.body[0].args.args:
-            if arg.annotation.id == "str":
+            if isinstance(arg.annotation, ast.Subscript):
+                if arg.annotation.slice.id == "int":
+                    v = z3.Const(arg.arg, SeqSort(z3.BitVecSort(64)))
+                elif arg.annotation.slice.id == "str":
+                    v = z3.Const(arg.arg, SeqSort(StringSort()))
+                else:
+                    raise Exception(f"type {arg.annotation.slice.id} of list not implemented yet")
+            elif arg.annotation.id == "str":
                 v = z3.String(arg.arg)
             else:
                 v = z3.BitVec(arg.arg, 64)
@@ -63,7 +70,10 @@ class SatTest:
                     if str(var) in self._args:
                         
                         if (isinstance(m[var], z3.SeqRef)):
-                            args[str(var)] = m[var].as_string()
+                            if m[var].is_string():
+                                args[str(var)] = m[var].as_string()
+                            else:
+                                args[str(var)] = seq_to_list(m[var])
                         else:
                             args[str(var)] = m[var].as_long()
                         if debug:

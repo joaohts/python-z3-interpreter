@@ -165,7 +165,7 @@ def z3_expr(node, vars=None, debug=False):
             elts_list.append(z3_elt)
             sort = z3_elt.sort()
 
-        
+
         return list_to_seq(elts_list, sort), vars
 
     # Function Call

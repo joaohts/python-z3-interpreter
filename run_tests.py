@@ -31,7 +31,7 @@ class SatTest:
         for arg in function_ast.body[0].args.args:
             if isinstance(arg.annotation, ast.Subscript):
                 if arg.annotation.slice.id == "int":
-                    v = z3.Const(arg.arg, SeqSort(z3.BitVecSort(64)))
+                    v = z3.Const(arg.arg, SeqSort(z3.IntSort()))
                 elif arg.annotation.slice.id == "str":
                     v = z3.Const(arg.arg, SeqSort(StringSort()))
                 else:
@@ -39,7 +39,7 @@ class SatTest:
             elif arg.annotation.id == "str":
                 v = z3.String(arg.arg)
             else:
-                v = z3.BitVec(arg.arg, 64)
+                v = z3.Int(arg.arg)
             vars[arg.arg] = v
         # Generta z3 expression
         if debug:

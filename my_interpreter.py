@@ -2,8 +2,11 @@ from typing import List
 import ast
 import inspect
 from z3 import *
+import sys
 
-MAX_STRING_SIZE = 300
+sys.setrecursionlimit(1000)
+
+MAX_RECURSIONS = 15
 
 NUL = (1 << 64) - 1
 
@@ -20,18 +23,17 @@ def seq_to_list(seq):
         lst.append(simplify(z3.simplify(seq.at(i))[0]))
     return lst
 
-def list_eq(lst1, lst2):
-    if len(lst1) == len(lst2):
-        checks = []
-        for i, j in zip(lst1, lst2):
-            if type(i) == list and type(j) == list:
-                checks.append(list_eq(i, j))
-            else:
-                checks.append(i == j)
-
-        return z3.And(checks)
+def stride(seq, step, rec_num):
+    if simplify(seq) == Empty(seq.sort()) or rec_num >= MAX_RECURSIONS:
+        return seq
     else:
+        return Concat(seq.at(0), stride(SubString(seq, step, Length(seq)), step, rec_num + 1))
+
+def is_in(seq, subseq, rec_num):
+    if simplify(seq) == Empty(seq.sort()) or rec_num >= 15:
         return False
+    else:
+        return z3.Or(simplify(SubString(seq, 0, Length(subseq))).eq(simplify(subseq)), is_in(SubString(seq, 1, Length(seq) - 1), subseq, rec_num + 1))
 
 def z3_expr(node, vars=None, debug=False):
     """Create a Z3 expression from a tree.
@@ -49,7 +51,7 @@ def z3_expr(node, vars=None, debug=False):
         if name in vars:
             return vars[name]
         else:
-            v = z3.BitVec(name, 64)
+            v = z3.Int(name)
             vars[name] = v
             if debug:
                 print(f"Added variable: {name} -> {v}")  # Debugging: Log added variables
@@ -74,7 +76,7 @@ def z3_expr(node, vars=None, debug=False):
         elif isinstance(node.op, ast.RShift):
             return lhs >> rhs, vars
         elif isinstance(node.op, ast.Pow):
-            return z3.BitVecVal(lhs.as_long() ** rhs.as_long(), 64), vars
+            return z3.IntVal(lhs.as_long() ** rhs.as_long()), vars
         elif isinstance(node.op, ast.Mod):
             return lhs % rhs, vars
         else:
@@ -88,14 +90,14 @@ def z3_expr(node, vars=None, debug=False):
 
     # Literal number.
     elif isinstance(node, ast.Num):  
-        return z3.BitVecVal(node.n, 64), vars
+        return z3.IntVal(node.n), vars
 
     # Constant
     elif isinstance(node, ast.Constant):
         if type(node.value) == str:
             return z3.StringVal(node.value), vars
         elif type(node.value) == int:
-            return z3.BitVecVal(node.value, 64), vars
+            return z3.IntVal(node.value), vars
         elif type(node.value) == bool:
             return z3.BoolVal(node.value), vars
         elif type(node.value) == float:
@@ -123,8 +125,6 @@ def z3_expr(node, vars=None, debug=False):
                 ast.LtE: lambda x, y: x <= y,
                 ast.Gt: lambda x, y: x > y,
                 ast.GtE: lambda x, y: x >= y,
-                ast.In: lambda x, y: x in y,
-                ast.NotIn: lambda x, y: x not in y,
             }
         lhs, vars = z3_expr(node.left, vars, debug)
         op = node.ops[0]
@@ -189,31 +189,22 @@ def z3_expr(node, vars=None, debug=False):
             index, vars = z3_expr(node.slice, vars, debug)
 
             if value.is_string():
-                return value.at(index.as_long()), vars
+                return value.at(index), vars
             else:
-                return value[index.as_long()], vars
+                return value[index], vars
         else:
             
-            upper, vars = z3_expr(node.slice.upper, vars, debug) if node.slice.upper else (z3.IntVal(len(value)) if not isinstance(value, z3.SeqRef) else z3.IntVal(MAX_STRING_SIZE), vars)
+            upper, vars = z3_expr(node.slice.upper, vars, debug) if node.slice.upper else  (z3.Length(value), vars)
             lower, vars = z3_expr(node.slice.lower, vars, debug) if node.slice.lower else (z3.IntVal(0), vars)
             step, vars = z3_expr(node.slice.step, vars, debug) if node.slice.step else (z3.IntVal(1), vars)
             
-            upper = upper.as_long()
-            lower = lower.as_long()
-            step = step.as_long()
-
             
-            if isinstance(value, z3.SeqRef):
-                s = z3.Empty(value.sort())
-                i = lower
-                while i < upper:
-                    s = Concat(s, value.at(i))
-                    i += step
+    
+            s = z3.SubString(value, lower, (upper-lower))
+            s = stride(s, step, 0)
 
-                return s, vars
+            return s, vars
 
-            else:
-                return value[lower:upper:step], vars
 
 
     else:

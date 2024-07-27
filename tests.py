@@ -80,6 +80,9 @@ def study_14(li: List[int], x: str):
 def study_6(i: int):
     return i % 123 == 4 and i > 10 ** 10
 
+def study_8(ls: List[str]):
+    return ls[1234] in ls[1235] and ls[1234] != ls[1235]
+
 
 
 
@@ -256,6 +259,13 @@ info_list = [
         "args": inspect.signature(test_list_var_str).parameters,
         "notes": "Tests list type as variable",
         "tags": ["basic", "list", "string"]
+    },
+    {
+        "name": "study_8",
+        "sat": study_8,
+        "args": inspect.signature(study_8).parameters,
+        "notes": "Find a list of more than 1235 strings such that the 1234th string is a proper substring of the 1235th.",
+        "tags": ["list", "study", "ppp", "string"]
     },
 ]
 
